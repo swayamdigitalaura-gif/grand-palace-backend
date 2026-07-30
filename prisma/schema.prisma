@@ -142,6 +142,7 @@ model Guide {
   ctaHref         String
   published       Boolean  @default(true)
   sortOrder       Int      @default(0) // controls display order on /guides — admin-editable
+  guideType       String   @default("normal") // "normal" (simple article) | "listicle" (ranked-card grid + comparison table)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
