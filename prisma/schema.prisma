@@ -1,0 +1,294 @@
+// Prisma schema for The Grand Palace admin backend
+// Database: PostgreSQL (hosted on Neon for now)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+}
+
+model AdminUser {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+}
+
+// One row per menu (a-la-carte, set-menu, beverages, or any admin-created
+// menu type) category/section
+model MenuCategory {
+  id        String     @id @default(cuid())
+  menuType  String     // "a-la-carte" | "set-menu" | "beverages" | any custom slug
+  menuLabel String?    // display name for a custom menuType, e.g. "Kids Menu" — only needed the first time a new menuType is created
+  slug      String     // e.g. "app-veg", "white-wine"
+  label     String     // display heading, e.g. "Appetizers · Vegetarian"
+  tag       String?    // "veg" | "non-veg" | "vegan" | "jain" | "mixed"
+  imageUrl  String?
+  active    Boolean    @default(true) // seasonal/limited-time categories can be hidden without deleting
+  sortOrder Int        @default(0)
+  items     MenuItem[]
+
+  @@unique([menuType, slug])
+  @@index([menuType])
+}
+
+model MenuItem {
+  id          String       @id @default(cuid())
+  categoryId  String
+  category    MenuCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  price       String?      // kept as string to allow "$24.90", "From $65", etc.
+  badge       String?      // e.g. "Chef's Special"
+  imageUrl    String?
+  active      Boolean      @default(true) // seasonal/limited-time items can be hidden without deleting
+  sortOrder   Int          @default(0)
+  // free-form extra fields for item types that don't fit name/desc/price
+  // (e.g. wine: { region, glass, bottle } / spirits: { note })
+  extra       Json?
+
+  @@index([categoryId])
+}
+
+// Sitewide hero/banner images keyed by a stable slug (e.g. "home-hero",
+// "menu-hero"). Public pages fetch by key with a fallback to their bundled
+// default image if no row exists yet.
+model SiteImage {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  label     String
+  url       String
+  updatedAt DateTime @updatedAt
+}
+
+// On/off switches for whole bespoke pages that don't fit the MenuItem or
+// SitePage models (e.g. Lunch Special's fixed pricing tiers). Public pages
+// check their key and show an "unavailable" state when inactive.
+model SiteToggle {
+  id     String  @id @default(cuid())
+  key    String  @unique
+  label  String
+  active Boolean @default(true)
+}
+
+model GalleryImage {
+  id         String   @id @default(cuid())
+  collection String   @default("gallery-page") // "gallery-page" (the /gallery page) | "homepage" (homepage gallery section)
+  category   String   // varies per collection — e.g. "Interior" | "Food" | "Events" | "Platter Box"
+  url        String
+  alt        String?
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  @@index([collection])
+
+  @@index([category])
+}
+
+// Generic content-driven pages (What's On offers, and future new pages)
+// Rendered through the WhatsOnSimpleTemplate-style component using this data.
+model SitePage {
+  id            String   @id @default(cuid())
+  slug          String   @unique // used as the URL, e.g. "order-online"
+  emoji         String?
+  badge         String?  // small colored tag shown on the /whats-on listing card, e.g. "Online Offer"
+  badgeColor    String?  @default("#c8860a")
+  title         String
+  subtitle      String
+  heroImage     String
+  cardImageHeight Int?   // custom height (px) for the photo on the /whats-on listing card, admin-resizable
+  sidebarImage  String
+  highlightLine String?
+  intro         String?
+  sections      Json     // [{ heading, priceTag?, intro?, items: string[] }]
+  ctaLabel      String
+  ctaHref       String
+  cta2Label     String?
+  cta2Href      String?
+  published     Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// Dining guide articles (/guides/$slug) — the ranked-listicle template
+// (hero, quick answer, comparison table, numbered restaurant cards with
+// Features/Dietary Options, FAQ). Admin-editable; new guides can be created
+// from the admin "Add Guide" flow using this same template.
+model Guide {
+  id              String   @id @default(cuid())
+  slug            String   @unique
+  title           String
+  metaTitle       String
+  metaDescription String
+  tag             String   @default("Dining") // Local | Catering | Events | Dining
+  publishedDate     String  // ISO date, e.g. "2026-07-27"
+  publishedDateDisplay String // e.g. "Jul 27, 2026"
+  updatedDate       String
+  updatedDateDisplay String
+  excerpt         String
+  intro           String   @db.Text
+  quickAnswer     String?  @db.Text
+  quickFacts      Json?    // [{ label, value }]
+  comparisonTable Json?    // { title, note?, rows: [{ name, area, style, dietary, goodForGroups, highlight? }] }
+  sections        Json     // [{ heading, body: string[], bullets?: string[], image?, imageAlt?, bannerIcon? }]
+  pricingTable    Json?    // { title, note?, rows: [{ item, price, note? }] }
+  externalLinks   Json?    // [{ label, href, source }]
+  faq             Json     // [{ q, a }]
+  relatedSlugs    Json     // string[]
+  ctaLabel        String
+  ctaHref         String
+  published       Boolean  @default(true)
+  sortOrder       Int      @default(0) // controls display order on /guides — admin-editable
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// Birthday Package page Reserve-form submissions, saved so nothing is lost
+// even though the visitor is redirected to NowBookIt for payment.
+model BirthdayEnquiry {
+  id        String   @id @default(cuid())
+  name      String
+  email     String
+  mobile    String
+  guests    String
+  date      String
+  time      String
+  cake      String?
+  message   String?
+  createdAt DateTime @default(now())
+}
+
+// Unified lead/enquiry capture for every form on the site. `type` groups them
+// into the admin "Leads" tabs (contact | events | office-catering |
+// venue-catering | venue-for-hire | birthday). `data` holds the type-specific
+// fields (guests, eventDate, budget, cake, etc.). For multi-step forms (the
+// Birthday wizard) we upsert by `sessionId` and record `step`/`status` so a
+// lead is captured the moment the first field is typed, even if abandoned.
+model Enquiry {
+  id        String   @id @default(cuid())
+  type      String   // which form it came from — drives the admin tab
+  status    String   @default("new") // new | in-progress | completed | contacted | closed
+  name      String?
+  email     String?
+  phone     String?
+  subject   String?
+  message   String?
+  step      String?  // furthest step reached in a multi-step form (birthday)
+  sessionId String?  @unique // per-visitor id for progressive upsert (birthday wizard)
+  data      Json?    // type-specific extra fields
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([type])
+  @@index([status])
+}
+
+// Per-page SEO overrides, keyed by the site-relative path (e.g. "/",
+// "/menu/a-la-carte"). When a row exists for a path, the frontend route for
+// that path uses these values instead of its own hardcoded defaults.
+model SeoSetting {
+  id              String   @id @default(cuid())
+  path            String   @unique
+  metaTitle       String?
+  metaDescription String?
+  focusKeywords   String?
+  ogImage         String?
+  canonicalUrl    String?
+  schema          Json?
+  headTags        String?
+  updatedAt       DateTime @updatedAt
+}
+
+// URL redirects, enforced server-side (real HTTP 301/302, not a client-side
+// bounce) by request middleware in the frontend on every request.
+model Redirect {
+  id         String   @id @default(cuid())
+  fromPath   String   @unique
+  toPath     String
+  statusCode Int      @default(301)
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+}
+
+// Site-wide SEO config: robots.txt content, and raw code injected into
+// every page's <head> (headerCode) or before </body> (footerCode) — e.g.
+// GTM/analytics snippets. Single row, fixed id.
+model SiteSeoConfig {
+  id         String   @id @default("singleton")
+  robotsTxt  String?
+  headerCode String?
+  footerCode String?
+  updatedAt  DateTime @updatedAt
+}
+
+// Editable page content (hero copy, section text, section images), keyed by
+// site-relative path — the original homepage-specific "Content" editor. Kept
+// for the homepage; new pages use the generic ContentBlock model below.
+model PageContent {
+  id                 String   @id @default(cuid())
+  path               String   @unique
+  heroKicker         String?
+  heroHeadlineTop    String?
+  heroHeadlineBottom String?
+  heroSubtext        String?
+  aboutHeading       String?
+  aboutBody          String?
+  menuSectionHeading String?
+  menuSectionBody    String?
+  menuSectionImage   String?
+  updatedAt          DateTime @updatedAt
+}
+
+// Generic, per-key editable content for EVERY page. Each editable string or
+// image on a page has a stable `key` (e.g. "hero.headline", "about.image").
+// The frontend reads content by (path,key) with a hardcoded fallback, so a
+// page renders its defaults until an editor overrides a key here. `type`
+// tells the admin UI whether to show a text box, textarea, or image picker.
+model ContentBlock {
+  id        String   @id @default(cuid())
+  path      String   // site-relative page path, e.g. "/about"
+  key       String   // stable field key within that page
+  value     String   @db.Text
+  type      String   @default("text") // text | textarea | image
+  updatedAt DateTime @updatedAt
+
+  @@unique([path, key])
+  @@index([path])
+}
+
+// Site-wide theme tokens (fonts, brand colours) editable from the admin
+// Theme panel. Injected as CSS variables into every page's <head>. Single
+// row, fixed id. All optional — anything unset falls back to the CSS defaults
+// already baked into styles.css.
+model ThemeSetting {
+  id            String   @id @default("singleton")
+  colorSaffron  String?
+  colorGold     String?
+  colorPalace   String?
+  colorCream    String?
+  fontDisplay   String?
+  fontBody      String?
+  baseFontScale String?  // e.g. "1.0" — multiplies base font size site-wide
+  updatedAt     DateTime @updatedAt
+}
+
+// Real guest reviews (Google, etc.) shown in the homepage Testimonials
+// section. Admin-editable so real reviews can be swapped in/out without a
+// code deploy.
+model Review {
+  id           String   @id @default(cuid())
+  name         String
+  quote        String   @db.Text
+  stars        Int      @default(5)
+  source       String?  // e.g. "Google" — small attribution badge
+  reviewerMeta String?  // e.g. "Local Guide · 18 reviews" — optional context line under the name
+  active       Boolean  @default(true)
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([active])
+}
