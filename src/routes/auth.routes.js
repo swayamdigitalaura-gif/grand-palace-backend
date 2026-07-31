@@ -17,9 +17,14 @@ router.post("/login", async (req, res) => {
 
   const token = signToken(user);
   const isProd = process.env.NODE_ENV === "production";
+  // Requests now arrive proxied through the frontend's own domain (see
+  // vite.config.ts routeRules), so this cookie is first-party from the
+  // browser's perspective — "lax" works everywhere and avoids relying on
+  // "none", which modern browsers increasingly block by default for
+  // genuinely cross-domain cookies.
   res.cookie("token", token, {
     httpOnly: true,
-    sameSite: isProd ? "none" : "lax",
+    sameSite: "lax",
     secure: isProd,
     maxAge: 7 * 24 * 60 * 60 * 1000,
   });
@@ -28,7 +33,7 @@ router.post("/login", async (req, res) => {
 
 router.post("/logout", (req, res) => {
   const isProd = process.env.NODE_ENV === "production";
-  res.clearCookie("token", { sameSite: isProd ? "none" : "lax", secure: isProd });
+  res.clearCookie("token", { sameSite: "lax", secure: isProd });
   res.json({ ok: true });
 });
 
