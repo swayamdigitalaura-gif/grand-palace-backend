@@ -33,7 +33,10 @@ router.post("/client-token", async (req, res) => {
       body: req.body,
       request: req,
       onBeforeGenerateToken: async () => ({
-        allowedContentTypes: ["image/jpeg", "image/png", "image/webp", "image/gif", "image/avif"],
+        allowedContentTypes: [
+          "image/jpeg", "image/png", "image/webp", "image/gif", "image/avif",
+          "video/mp4", "video/webm", "video/quicktime",
+        ],
         addRandomSuffix: true,
       }),
     });

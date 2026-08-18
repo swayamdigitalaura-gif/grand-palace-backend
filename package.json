@@ -27,6 +27,7 @@
     "stripe": "^22.3.2"
   },
   "devDependencies": {
+    "cheerio": "^1.2.0",
     "prisma": "^5.22.0"
   }
 }

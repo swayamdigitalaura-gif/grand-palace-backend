@@ -101,6 +101,9 @@ model SitePage {
   heroImage     String
   cardImageHeight Int?   // custom height (px) for the photo on the /whats-on listing card, admin-resizable
   sidebarImage  String
+  heroVideo     String?  // optional hero background video (mp4/webm) — shown instead of the static heroImage when set
+  galleryImages Json?    // string[] of extra photo URLs, shown as a strip below the hero
+  contentBlocks Json?    // [{ subtitle?: string, body: string }] — repeatable rich-text description blocks (same {{color}}/{{size}}/link/heading/bullet/image markup as Guides)
   highlightLine String?
   intro         String?
   sections      Json     // [{ heading, priceTag?, intro?, items: string[] }]
@@ -131,6 +134,8 @@ model Guide {
   excerpt         String
   intro           String   @db.Text
   quickAnswer     String?  @db.Text
+  heroImage       String?  // full-width image below the hero band
+  heroImageAlt    String?
   quickFacts      Json?    // [{ label, value }]
   comparisonTable Json?    // { title, note?, rows: [{ name, area, style, dietary, goodForGroups, highlight? }] }
   sections        Json     // [{ heading, body: string[], bullets?: string[], image?, imageAlt?, bannerIcon? }]
